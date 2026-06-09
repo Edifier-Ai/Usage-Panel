@@ -12,23 +12,53 @@ struct LiquidGlassModifier: ViewModifier {
 
     @Environment(\.colorScheme) private var colorScheme
 
+    @ViewBuilder
     func body(content: Content) -> some View {
+        #if compiler(>=6.3)
+        if #available(macOS 26.0, *) {
+            nativeGlass(content)
+        } else {
+            fallbackGlass(content)
+        }
+        #else
+        fallbackGlass(content)
+        #endif
+    }
+
+    @ViewBuilder
+    private func fallbackGlass(_ content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
         content
             .background(.ultraThinMaterial)
             .background(tintColor)
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                shape
                     .stroke(borderColor, lineWidth: 1)
             )
             .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(topHighlight)
-                    .frame(height: 1)
-                    .padding(.horizontal, prominence == .capsule ? 9 : 14)
+                if showsTopHighlight {
+                    shape
+                        .fill(topHighlight)
+                        .frame(height: 1)
+                        .padding(.horizontal, prominence == .capsule ? 9 : 14)
+                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .clipShape(shape)
             .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
     }
+
+    #if compiler(>=6.3)
+    @available(macOS 26.0, *)
+    @ViewBuilder
+    private func nativeGlass(_ content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        content
+            .glassEffect(.regular.interactive(), in: shape)
+            .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
+    }
+    #endif
 
     private var tintColor: Color {
         switch (colorScheme, prominence) {
@@ -57,6 +87,10 @@ struct LiquidGlassModifier: ViewModifier {
         colorScheme == .light ? Color.white.opacity(0.72) : Color.white.opacity(0.52)
     }
 
+    private var showsTopHighlight: Bool {
+        prominence != .popover
+    }
+
     private var shadowColor: Color {
         colorScheme == .light ? Color.black.opacity(0.14) : Color.black.opacity(0.38)
     }
@@ -73,5 +107,20 @@ struct LiquidGlassModifier: ViewModifier {
 extension View {
     func liquidGlass(cornerRadius: CGFloat, prominence: GlassProminence) -> some View {
         modifier(LiquidGlassModifier(cornerRadius: cornerRadius, prominence: prominence))
+    }
+
+    @ViewBuilder
+    func nativeGlassEffectContainer(spacing: CGFloat? = nil) -> some View {
+        #if compiler(>=6.3)
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                self
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }

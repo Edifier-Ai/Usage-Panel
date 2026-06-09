@@ -29,4 +29,20 @@ final class WidgetSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(store.load(), settings)
     }
+
+    func testSaveDoesNotPersistObsoleteCapsuleStyleSetting() {
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let store = WidgetSettingsStore(defaults: defaults)
+        defaults.set("style2", forKey: "CodexIslandUsageWidget.capsuleStyle")
+
+        store.save(WidgetSettings())
+
+        XCTAssertNil(defaults.object(forKey: "CodexIslandUsageWidget.capsuleStyle"))
+    }
+
+    func testAppearanceModeExposesColorSchemePreference() {
+        XCTAssertEqual(WidgetAppearanceMode.system.colorSchemePreference, .system)
+        XCTAssertEqual(WidgetAppearanceMode.dark.colorSchemePreference, .dark)
+        XCTAssertEqual(WidgetAppearanceMode.light.colorSchemePreference, .light)
+    }
 }

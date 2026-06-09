@@ -5,6 +5,7 @@ public final class WidgetSettingsStore {
         static let appearanceMode = "CodexIslandUsageWidget.appearanceMode"
         static let showsWeeklyQuotaInDefault = "CodexIslandUsageWidget.showsWeeklyQuotaInDefault"
         static let isHidden = "CodexIslandUsageWidget.isHidden"
+        static let obsoleteCapsuleStyle = "CodexIslandUsageWidget.capsuleStyle"
     }
 
     private let defaults: UserDefaults
@@ -35,5 +36,6 @@ public final class WidgetSettingsStore {
         defaults.set(settings.appearanceMode.rawValue, forKey: Keys.appearanceMode)
         defaults.set(settings.showsWeeklyQuotaInDefault, forKey: Keys.showsWeeklyQuotaInDefault)
         defaults.set(settings.isHidden, forKey: Keys.isHidden)
+        defaults.removeObject(forKey: Keys.obsoleteCapsuleStyle)
     }
 }

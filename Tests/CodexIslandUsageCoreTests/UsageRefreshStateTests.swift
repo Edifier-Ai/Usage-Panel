@@ -40,4 +40,41 @@ final class UsageRefreshStateTests: XCTestCase {
             .urgent
         )
     }
+
+    func testRefreshStatePaletteUsesGreenYellowRedProgression() {
+        XCTAssertEqual(
+            UsageColorPolicy.accentColor(for: .normal),
+            UsageDisplayColor(red: 0.37, green: 0.94, blue: 0.64)
+        )
+        XCTAssertEqual(
+            UsageColorPolicy.accentColor(for: .soon),
+            UsageDisplayColor(red: 1.0, green: 0.84, blue: 0.28)
+        )
+        XCTAssertEqual(
+            UsageColorPolicy.accentColor(for: .urgent),
+            UsageDisplayColor(red: 1.0, green: 0.36, blue: 0.42)
+        )
+    }
+
+    func testGradientTerminalColorUsesWhiteInEveryTheme() {
+        XCTAssertEqual(
+            UsageColorPolicy.gradientTerminalColor(for: .light),
+            UsageDisplayColor(red: 1.0, green: 1.0, blue: 1.0)
+        )
+        XCTAssertEqual(
+            UsageColorPolicy.gradientTerminalColor(for: .dark),
+            UsageDisplayColor(red: 1.0, green: 1.0, blue: 1.0)
+        )
+    }
+
+    func testDefaultRailContrastShadowOnlyAppearsInLightTheme() {
+        XCTAssertEqual(
+            UsageColorPolicy.defaultRailContrastShadowOpacity(for: .light),
+            0.16
+        )
+        XCTAssertEqual(
+            UsageColorPolicy.defaultRailContrastShadowOpacity(for: .dark),
+            0.0
+        )
+    }
 }

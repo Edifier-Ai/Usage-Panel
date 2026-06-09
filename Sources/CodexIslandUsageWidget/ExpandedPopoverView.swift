@@ -3,32 +3,75 @@ import SwiftUI
 
 struct ExpandedPopoverView: View {
     @ObservedObject var viewModel: WidgetViewModel
-    let now: Date
+    @State private var isRefreshing = false
 
     var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            content(now: viewModel.isAwaitingInitialUsage ? viewModel.now : context.date)
+        }
+        .foregroundStyle(.primary)
+        .padding(13)
+        .frame(width: 292)
+        .liquidGlass(cornerRadius: 20, prominence: .popover)
+        .widgetAppearance(viewModel.settings.appearanceMode)
+        .nativeGlassEffectContainer()
+    }
+
+    private func content(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Codex Usage")
-                .font(.system(size: 12, weight: .semibold))
+            HStack(spacing: 8) {
+                Text("Usage Panel")
+                    .font(.system(size: 12, weight: .semibold))
+
+                Spacer()
+
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                    .animation(isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard !isRefreshing else {
+                            return
+                        }
+                        isRefreshing = true
+                        Task { @MainActor in
+                            await viewModel.forceRefresh()
+                            isRefreshing = false
+                        }
+                    }
+                    .help("强制刷新")
+                    .accessibilityLabel("强制刷新")
+                    .accessibilityAddTraits(.isButton)
+            }
+
+            statusRow(now: now)
 
             metricBlock(
                 title: "5 小时额度",
-                value: "\(Int(viewModel.snapshot.fiveHourUsedFraction * 100))% used",
+                value: quotaValueText(viewModel.snapshot.fiveHourRemainingPercent),
                 detailTitle: "刷新倒计时",
-                detailValue: refreshCountdownText,
+                detailValue: fiveHourRefreshCountdownText(now: now),
                 rail: UsageRail(
                     fraction: viewModel.snapshot.fiveHourUsedFraction,
-                    kind: .fiveHour(viewModel.refreshState(now: now))
+                    kind: .fiveHour(viewModel.refreshState()),
+                    isLoading: viewModel.isAwaitingInitialUsage,
+                    height: 3
                 )
             )
 
             metricBlock(
-                title: "本周额度",
-                value: "\(Int(viewModel.snapshot.weeklyUsedFraction * 100))% used",
-                detailTitle: "数据更新",
-                detailValue: lastUpdatedText,
+                title: "周额度",
+                value: quotaValueText(viewModel.snapshot.weeklyRemainingPercent),
+                detailTitle: "刷新倒计时",
+                detailValue: weeklyRefreshCountdownText(now: now),
                 rail: UsageRail(
                     fraction: viewModel.snapshot.weeklyUsedFraction,
-                    kind: .week
+                    kind: .week,
+                    isLoading: viewModel.isAwaitingInitialUsage,
+                    height: 3
                 )
             )
 
@@ -61,18 +104,47 @@ struct ExpandedPopoverView: View {
                 .toggleStyle(.switch)
                 .labelsHidden()
             }
-
-            Button("隐藏") {
-                viewModel.setHidden(true)
-            }
-            .buttonStyle(.borderless)
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
         }
-        .foregroundStyle(.primary)
-        .padding(13)
-        .frame(width: 292)
-        .liquidGlass(cornerRadius: 20, prominence: .popover)
+    }
+
+    private func statusRow(now: Date) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+            Text(statusText(now: now))
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(statusColor)
+    }
+
+    private func statusText(now: Date) -> String {
+        if !viewModel.hasLoadedUsage, let usageLoadError = viewModel.usageLoadError {
+            return usageLoadError
+        }
+
+        if viewModel.isAwaitingInitialUsage {
+            return "正在读取 Codex 用量"
+        }
+
+        return viewModel.snapshot.dataFreshnessText(now: now)
+    }
+
+    private var statusColor: Color {
+        if !viewModel.hasLoadedUsage, viewModel.usageLoadError != nil {
+            return UsageWidgetColors.staleAccent
+        }
+
+        if viewModel.isAwaitingInitialUsage {
+            return UsageWidgetColors.loadingAccent
+        }
+
+        return viewModel.snapshot.isFresh
+            ? UsageWidgetColors.freshAccent
+            : UsageWidgetColors.staleAccent
     }
 
     private func metricBlock(
@@ -105,16 +177,52 @@ struct ExpandedPopoverView: View {
         }
     }
 
-    private var refreshCountdownText: String {
-        let remaining = max(0, viewModel.snapshot.fiveHourRefreshDate.timeIntervalSince(now))
-        let hours = Int(remaining) / 3600
+    private func fiveHourRefreshCountdownText(now: Date) -> String {
+        if viewModel.isAwaitingInitialUsage {
+            return "loading"
+        }
+
+        guard viewModel.hasLoadedUsage else {
+            return "未读取"
+        }
+
+        return countdownText(until: viewModel.snapshot.fiveHourRefreshDate, now: now)
+    }
+
+    private func weeklyRefreshCountdownText(now: Date) -> String {
+        if viewModel.isAwaitingInitialUsage {
+            return "loading"
+        }
+
+        guard viewModel.hasLoadedUsage else {
+            return "未读取"
+        }
+
+        return countdownText(until: viewModel.snapshot.weeklyRefreshDate, now: now)
+    }
+
+    private func countdownText(until refreshDate: Date, now: Date) -> String {
+        let remaining = max(0, refreshDate.timeIntervalSince(now))
+        let days = Int(remaining) / (24 * 60 * 60)
+        let hours = (Int(remaining) % (24 * 60 * 60)) / 3600
         let minutes = (Int(remaining) % 3600) / 60
+
+        if days > 0 {
+            return "\(days)d \(hours)h"
+        }
+
         return "\(hours)h \(minutes)m"
     }
 
-    private var lastUpdatedText: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: viewModel.snapshot.lastUpdated)
+    private func quotaValueText(_ remainingPercent: Int) -> String {
+        if viewModel.isAwaitingInitialUsage {
+            return "loading"
+        }
+
+        guard viewModel.hasLoadedUsage else {
+            return "未读取"
+        }
+
+        return "剩余额度 \(remainingPercent)%"
     }
 }

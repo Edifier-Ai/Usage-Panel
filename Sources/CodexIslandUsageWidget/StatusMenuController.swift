@@ -16,7 +16,7 @@ final class StatusMenuController: NSObject {
     }
 
     private func configureMenu() {
-        statusItem.button?.title = "Codex"
+        statusItem.button?.title = "Usage"
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Show Widget", action: #selector(showWidget), keyEquivalent: "s"))
